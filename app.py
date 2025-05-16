@@ -1,40 +1,37 @@
+# datasahayak/app.py
 import streamlit as st
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import io
+from modules import stats_analyzer, plot_generator, abstract_writer, formatter
 
-st.set_page_config(page_title="DataSahayak - Thesis Data Helper", layout="wide")
-st.title("📊 DataSahayak: Thesis Data Helper")
-st.markdown("Upload your CSV file to get quick data insights and visualizations. Ideal for thesis analysis!")
+st.set_page_config(page_title="DataSahayak", layout="wide")
+st.title("📊 DataSahayak: Thesis & Data Helper")
 
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+uploaded_file = st.file_uploader("Upload your Excel data", type=["xlsx"])
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.subheader("📄 Data Preview")
-    st.dataframe(df.head())
+if uploaded_file:
+    df = stats_analyzer.load_and_clean(uploaded_file)
+    st.subheader("Data Preview")
+    st.dataframe(df)
 
-    st.subheader("📈 Summary Statistics")
-    st.write(df.describe(include='all'))
+    anova_res, tukey_res = stats_analyzer.run_anova_tukey(df)
+    st.subheader("ANOVA Table")
+    st.dataframe(anova_res)
 
-    st.subheader("🧼 Missing Values")
-    st.write(df.isnull().sum())
+    st.subheader("Tukey HSD Results")
+    st.text(str(tukey_res))
 
-    st.subheader("📊 Histogram")
-    numeric_cols = df.select_dtypes(include='number').columns.tolist()
-    col = st.selectbox("Select column for histogram", numeric_cols)
-    fig, ax = plt.subplots()
-    sns.histplot(df[col], kde=True, ax=ax)
+    st.subheader("Boxplot")
+    fig = plot_generator.make_boxplot(df)
     st.pyplot(fig)
 
-    st.subheader("📉 Correlation Heatmap")
-    fig2, ax2 = plt.subplots(figsize=(10, 6))
-    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap="coolwarm", ax=ax2)
-    st.pyplot(fig2)
+    if st.button("Generate Abstract"):
+        summary = stats_analyzer.summarize_stats(anova_res, tukey_res)
+        abstract = abstract_writer.generate_abstract(summary)
+        st.text_area("Generated Abstract", abstract, height=300)
+        formatter.save_to_docx("abstract.docx", abstract)
+        with open("output/abstract.docx", "rb") as file:
+            st.download_button("Download Abstract (Word)", file, file_name="Abstract.docx")
 
-    st.markdown("---")
-    st.markdown("### 🔓 Want a downloadable PDF report of your analysis?")
-    st.markdown("[Unlock Now for ₹499](https://rzp.io/l/datasahayak)")
-else:
-    st.info("Please upload a CSV file to begin.")
+    if st.button("Download ICAR Format"):
+        formatter.build_formatted_doc(df, template="templates/icar_template.docx")
+        with open("output/icar_output.docx", "rb") as file:
+            st.download_button("Download ICAR Paper", file, file_name="ICAR_Paper.docx")
